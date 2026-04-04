@@ -39,7 +39,7 @@ public class Game {
 
     private int away_team_score;
 
-    private String week_id;
+    private boolean isComplete;
 
     private LocalDateTime createdAt;
 
@@ -171,19 +171,19 @@ public class Game {
         this.away_team_score = away_team_score;
     }
 
-    public String getWeek_id() {
-        return week_id;
-    }
-
-    public void setWeek_id(String week_id) {
-        this.week_id = week_id;
-    }
-
     public LocalDateTime getCreatedAt() {
         return createdAt;
     }
     
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public boolean isComplete() {
+        return isComplete;
+    }
+
+    public void setComplete(boolean isComplete) {
+        this.isComplete = isComplete;
     }
 }

@@ -5,11 +5,17 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
 
+import com.sports_betting.app.model.bets.UserBet;
+import com.sports_betting.app.model.games.Game;
 import com.sports_betting.app.model.metadata.SystemMetadata;
 import com.sports_betting.app.repository.MetadataRepository;
 import com.sports_betting.app.service.GameOddsService;
+import com.sports_betting.app.service.UserBetService;
+
+import reactor.core.publisher.Flux;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Component
 public class SyncManager implements ApplicationRunner {
@@ -18,7 +24,10 @@ public class SyncManager implements ApplicationRunner {
     private MetadataRepository repository;
 
     @Autowired
-    private GameOddsService gameOddsService; // Your existing API logic class
+    private GameOddsService gameOddsService;
+
+    @Autowired
+    private UserBetService userBetService;
 
     private static final String GAME_ODDS_SYNC_KEY = "GAME_ODDS_SYNC";
     private static final String GAME_RESULTS_SYNC_KEY = "GAME_RESULTS_SYNC";
@@ -62,7 +71,25 @@ public class SyncManager implements ApplicationRunner {
                 .orElse(null);
 
         if (lastGameResultsSync == null || lastGameResultsSync.isBefore(LocalDateTime.now().minusHours(6))) {
-        
+            Flux.fromArray(SPORTS)
+                .flatMap(sport -> gameOddsService.updateGameByGameResults(sport)) // Fires requests in parallel
+                .doOnNext(updatedGames -> userBetService.updateBetsByGameResults(updatedGames))
+                .subscribe(
+                    result -> {
+                        if (result != null && !result.isEmpty()) {
+                            System.out.println("Updated game results and user bets for sport: " + result.get(0).getSportKey());
+                        } else {
+                            System.out.println("Updated game results and user bets for a sport with no games.");
+                        }
+                    },
+                    error -> {
+                        System.err.println("Failed to sync: " + error.getMessage());
+                    },
+                    () -> {
+                        repository.updateTimestamp(GAME_RESULTS_SYNC_KEY, LocalDateTime.now());
+                        System.out.println("All sports synced successfully!");
+                    }
+                );
         } else {
             System.out.println("Game results are up to date. Last sync was: " + lastGameResultsSync);
         }

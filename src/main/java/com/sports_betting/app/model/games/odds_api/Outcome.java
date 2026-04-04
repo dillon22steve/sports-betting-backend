@@ -1,4 +1,4 @@
-package com.sports_betting.app.model.games;
+package com.sports_betting.app.model.games.odds_api;
 
 // Outcome.java
 import com.fasterxml.jackson.annotation.JsonProperty;

@@ -1,7 +1,8 @@
-package com.sports_betting.app.model.games;
+package com.sports_betting.app.model.games.odds_api;
 
 // Market.java
 import com.fasterxml.jackson.annotation.JsonProperty;
+
 import java.util.List;
 
 public class Market {

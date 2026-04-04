@@ -2,17 +2,25 @@ package com.sports_betting.app.service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 
 import org.springframework.web.reactive.function.client.WebClient;
 
-import com.sports_betting.app.model.games.Bookmaker;
-import com.sports_betting.app.model.games.Event;
 import com.sports_betting.app.model.games.Game;
-import com.sports_betting.app.model.games.Market;
-import com.sports_betting.app.model.games.Outcome;
+import com.sports_betting.app.model.games.odds_api.Bookmaker;
+import com.sports_betting.app.model.games.odds_api.Event;
+import com.sports_betting.app.model.games.odds_api.Market;
+import com.sports_betting.app.model.games.odds_api.Outcome;
+import com.sports_betting.app.model.games.results_api.GameResult;
+import com.sports_betting.app.model.games.results_api.Score;
 import com.sports_betting.app.repository.GameRepository;
+
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 
 @Service
@@ -22,6 +30,10 @@ public class GameOddsService {
 
     private GameRepository gameRepository;
 
+    private final String API_BASE_URL = "https://api.the-odds-api.com/v4/sports/";
+
+    private final String API_KEY = "36116c626d8f31cec63424d2ae3b6cce";
+
     public GameOddsService(GameRepository gameRepository) {
         this.gameRepository = gameRepository;
     }
@@ -30,7 +42,7 @@ public class GameOddsService {
     public List<Game> storeGameOdds(String sport) {
         // Logic to fetch game odds from the database or an external API
         List<Event> events = client.get()
-            .uri("https://api.the-odds-api.com/v4/sports/" + sport + "/odds/?apiKey=36116c626d8f31cec63424d2ae3b6cce&regions=us&bookmakers=draftkings&markets=h2h,spreads&oddsFormat=american")
+            .uri(API_BASE_URL + sport + "/odds/?apiKey=" + API_KEY + "&regions=us&bookmakers=draftkings&markets=h2h,spreads&oddsFormat=american")
             .retrieve()
             .bodyToFlux(Event.class)
             .collectList()
@@ -52,6 +64,7 @@ public class GameOddsService {
         game.setCommence_time(event.getCommenceTime());
         game.setHomeTeam(event.getHomeTeam());
         game.setAwayTeam(event.getAwayTeam());
+        game.setComplete(false);
 
         if (event.getBookmakers() == null || event.getBookmakers().isEmpty()) {
             return game;
@@ -114,6 +127,44 @@ public class GameOddsService {
 
     public List<Game> getGameOdds(String sport) {
         return gameRepository.findBySportKey(sport);
+    }
+
+    public Mono<List<Game>> updateGameByGameResults(String sport) {
+        System.out.println("Updating game results for sport: " + sport);
+    
+    // 1. Fetch your existing local games (Assuming this is a standard List)
+        List<Game> gamesToUpdate = getGameOdds(sport);
+
+        // 2. Fetch the API results and turn them into a Map reactively
+        return client.get()
+            .uri(API_BASE_URL + sport + "/scores/?daysFrom=3&apiKey=" + API_KEY)
+            .retrieve()
+            .bodyToFlux(GameResult.class)
+            // Convert the Flux into a Mono<Map<String, GameResult>>
+            .collectMap(GameResult::getId, Function.identity())
+            .map(resultMap -> {
+                // 3. Now that we have the map, update our list
+                gamesToUpdate.stream()
+                    .filter(game -> resultMap.containsKey(game.getId()))
+                    .forEach(game -> {
+                        GameResult result = resultMap.get(game.getId());
+                        System.out.println("Updating game: " + game.getId() + " with results from API");
+                        if (result.getScores() != null && result.getScores().length >= 2) {
+                            for (Score s : result.getScores()) {
+                                if (s.getName() != null && s.getName().equalsIgnoreCase(game.getHomeTeam())) {
+                                    System.out.println("Setting home team score for game " + game.getId() + ": " + s.getScore());
+                                    game.setHome_team_score(s.getScore());
+                                } else if (s.getName() != null && s.getName().equalsIgnoreCase(game.getAwayTeam())) {
+                                    System.out.println("Setting away team score for game " + game.getId() + ": " + s.getScore());
+                                    game.setAway_team_score(s.getScore());
+                                }
+                            }
+                            game.setComplete(true);
+                            gameRepository.save(game);
+                        }
+                    });
+                return gamesToUpdate;
+            });
     }
     
 }
