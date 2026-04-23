@@ -41,8 +41,8 @@ public class SyncManager implements ApplicationRunner {
                 .map(SystemMetadata::getConfigValue)
                 .orElse(null);
 
-        // 2. Check if we need to sync (if null or older than 24 hours)
-        if (lastGameOddsSync == null || lastGameOddsSync.isBefore(LocalDateTime.now().minusHours(24))) {
+        // 2. Check if we need to sync (if null or not the same calendar day)
+        if (lastGameOddsSync == null || !lastGameOddsSync.toLocalDate().equals(LocalDateTime.now().toLocalDate())) {
             System.out.println("Starting scheduled sports data sync...");
             
             try {
